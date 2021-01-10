@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"runtime"
 )
@@ -18,7 +19,7 @@ import (
 type result struct {
 	filename string
 	path     string
-	url      string
+	data     string
 	status   int
 }
 
@@ -48,16 +49,18 @@ func main() {
 
 	for i := 0; i < len(matches); i++ {
 		chMessage := <-channel
-		message := fmt.Sprintf("\n%s\n%s", chMessage.filename, chMessage.url)
+		message := fmt.Sprintf("\n%s\n%s", chMessage.filename, chMessage.data)
 
 		if status {
-			go checkURL(chMessage.url, chMessage.filename, statusCheckChannel)
-			chMessage.status = <-statusCheckChannel
-			message = fmt.Sprintf("\n%s\n%s\nstatus code:%d", chMessage.filename, chMessage.url, chMessage.status)
+			if isDecodedDataURL(chMessage.data) == true {
+				go checkURL(chMessage, statusCheckChannel)
+				chMessage.status = <-statusCheckChannel
+				message = fmt.Sprintf("\n%s\n%s\nstatus code:%d", chMessage.filename, chMessage.data, chMessage.status)
+			} else {
+				message = fmt.Sprintf("\n%s\n%s\nNot a valid url", chMessage.filename, chMessage.data)
+			}
 		}
-
 		fmt.Println(message)
-
 	}
 }
 
@@ -70,24 +73,40 @@ func decodeQRCode(path string, ch chan result) {
 	if err != nil {
 		log.Fatal("error in decoding from image: ", err, path)
 	}
+
 	qrCode, err := goqr.Recognize(img)
+
 	if err != nil {
 		log.Fatal("qrcode decoding error: ", err)
 	}
 	ch <- result{
 		filename: getFileName(path),
 		path:     path,
-		url:      string(qrCode[0].Payload),
+		data:     string(qrCode[0].Payload),
 	}
 }
 
-func checkURL(qrURL string, filename string, ch chan int) {
-	resp, err := http.Get(qrURL)
+func checkURL(chMessage result, ch chan int) {
+
+	resp, err := http.Get(chMessage.data)
 	if err != nil {
-		fmt.Printf("\nFailed to fetch %s\nFile name %s\n\n", qrURL, filename)
+		fmt.Printf("\nFailed to fetch %s\nFile name %s\n\n", chMessage.data, chMessage.filename)
 		log.Fatal("error : ", err)
 	}
 	ch <- resp.StatusCode
+}
+
+func isDecodedDataURL(data string) bool {
+
+	urlPath, err := url.ParseRequestURI(data)
+	if err != nil {
+		return false
+	}
+
+	if urlPath.Hostname() == "" || urlPath.Scheme == "" {
+		return false
+	}
+	return true
 }
 
 func getFileName(path string) string {
