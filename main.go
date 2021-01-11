@@ -30,7 +30,7 @@ func main() {
 	channel := make(chan result)
 	statusCheckChannel := make(chan int)
 
-	flag.StringVar(&input, "input", "", "image file path. Can also glob pattern like /home/user/*.jpeg")
+	flag.StringVar(&input, "input", "", "Image file path. Can also be a glob pattern like /home/user/*.jpeg")
 	flag.BoolVar(&status, "status", false, "Perform an HTTP GET request to the decoded url")
 	flag.Parse()
 
